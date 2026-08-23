@@ -6,12 +6,13 @@ import { StatusTracker, STATUS_STAGES } from "@/components/StatusTracker";
 import { TriageResult } from "@/components/TriageResult";
 import { UrgencyBadge } from "@/components/ui";
 import { referenceFor } from "@/lib/markdown";
-import type { ComplaintRecord, TriageResponse } from "@/lib/types";
+import type { ComplaintPhoto, ComplaintRecord, TriageResponse } from "@/lib/types";
 
 const DEMO_COMPLAINT = "Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor.";
 
 export default function Home() {
   const [complaint, setComplaint] = useState(DEMO_COMPLAINT);
+  const [photos, setPhotos] = useState<ComplaintPhoto[]>([]);
   const [mockMode, setMockMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +60,11 @@ export default function Home() {
         input: text,
         createdAt: now.toISOString(),
         source: payload.source,
+        photos,
       };
 
       setRecords((previous) => [record, ...previous]);
+      setPhotos([]);
       setActiveId(record.id);
       setStageIndex(1);
       setNotice(payload.notice ?? null);
@@ -107,6 +110,8 @@ export default function Home() {
             mockMode={mockMode}
             onMockModeChange={setMockMode}
             error={error}
+            photos={photos}
+            onPhotosChange={setPhotos}
           />
 
           {records.length > 0 ? (
@@ -131,6 +136,7 @@ export default function Home() {
                         <span className="text-sm font-medium capitalize text-slate-100">{record.complaintType}</span>
                         <span className="block text-xs text-slate-400">
                           {record.reference} · {record.agency} · {record.location}
+                          {record.photos.length > 0 ? ` · ${record.photos.length} photo${record.photos.length === 1 ? "" : "s"}` : ""}
                         </span>
                       </span>
                       <UrgencyBadge urgency={record.urgency} />

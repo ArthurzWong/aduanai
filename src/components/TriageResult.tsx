@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toMarkdown } from "@/lib/markdown";
+import { formatBytes } from "@/lib/photos";
 import type { ComplaintRecord } from "@/lib/types";
 import { Field, SourceBadge, UrgencyBadge } from "./ui";
 
@@ -107,6 +108,27 @@ export function TriageResult({ record }: Props) {
                 </li>
               ))}
             </ol>
+          </div>
+
+          <div>
+            <p className="label">Photo evidence</p>
+            {record.photos.length > 0 ? (
+              <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {record.photos.map((photo) => (
+                  <li key={photo.id} className="overflow-hidden rounded-xl border border-white/10">
+                    <a href={photo.dataUrl} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover transition hover:opacity-80" />
+                    </a>
+                    <p className="truncate bg-slate-950/80 px-2 py-1 text-[10px] text-slate-400">
+                      {photo.name} · {formatBytes(photo.size)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-slate-400">No photos attached to this complaint.</p>
+            )}
           </div>
 
           <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 p-4">

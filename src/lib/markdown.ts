@@ -1,4 +1,5 @@
 import { agencyInfo } from "./agencies";
+import { formatBytes } from "./photos";
 import type { ComplaintRecord } from "./types";
 
 export function toMarkdown(record: ComplaintRecord): string {
@@ -23,6 +24,11 @@ export function toMarkdown(record: ComplaintRecord): string {
     "",
     "## Next action",
     record.nextAction,
+    "",
+    "## Photo evidence",
+    ...(record.photos.length > 0
+      ? record.photos.map((photo, index) => `${index + 1}. ${photo.name} (${formatBytes(photo.size)})`)
+      : ["_No photos attached._"]),
     "",
     "## Original complaint",
     "> " + record.input.replace(/\n+/g, "\n> "),

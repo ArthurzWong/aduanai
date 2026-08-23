@@ -1,6 +1,9 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { SAMPLE_PROMPTS } from "@/lib/sample-prompts";
+import { MAX_PHOTOS, MAX_PHOTO_BYTES, formatBytes, readPhotos } from "@/lib/photos";
+import type { ComplaintPhoto } from "@/lib/types";
 
 interface Props {
   value: string;
@@ -10,6 +13,8 @@ interface Props {
   mockMode: boolean;
   onMockModeChange: (value: boolean) => void;
   error: string | null;
+  photos: ComplaintPhoto[];
+  onPhotosChange: (photos: ComplaintPhoto[]) => void;
 }
 
 export function ComplaintForm({
@@ -20,7 +25,22 @@ export function ComplaintForm({
   mockMode,
   onMockModeChange,
   error,
+  photos,
+  onPhotosChange,
 }: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  async function addFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const result = await readPhotos(Array.from(files), photos);
+    setPhotoError(result.error);
+    if (result.photos.length > 0) {
+      onPhotosChange([...photos, ...result.photos]);
+    }
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
   return (
     <section className="card">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -56,6 +76,58 @@ export function ComplaintForm({
           className="w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
         />
 
+        <div className="mt-4 rounded-xl border border-dashed border-white/15 bg-slate-950/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-100">Photo evidence</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Attach up to {MAX_PHOTOS} photos ({formatBytes(MAX_PHOTO_BYTES)} each) to substantiate the complaint.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+              className="rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-sky-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Upload photos
+            </button>
+          </div>
+
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => void addFiles(event.target.files)}
+          />
+
+          {photos.length > 0 ? (
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {photos.map((photo) => (
+                <li key={photo.id} className="group relative overflow-hidden rounded-xl border border-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => onPhotosChange(photos.filter((item) => item.id !== photo.id))}
+                    aria-label={`Remove ${photo.name}`}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-xs text-slate-200 transition hover:bg-rose-500 hover:text-white"
+                  >
+                    ×
+                  </button>
+                  <p className="truncate bg-slate-950/80 px-2 py-1 text-[10px] text-slate-400">
+                    {photo.name} · {formatBytes(photo.size)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {photoError ? <p className="mt-3 text-xs text-amber-300">{photoError}</p> : null}
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="submit"
@@ -66,12 +138,18 @@ export function ComplaintForm({
           </button>
           <button
             type="button"
-            onClick={() => onChange("")}
+            onClick={() => {
+              onChange("");
+              onPhotosChange([]);
+              setPhotoError(null);
+            }}
             className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 transition hover:border-white/25 hover:text-white"
           >
             Clear
           </button>
-          <span className="text-xs text-slate-500">{value.trim().length} characters</span>
+          <span className="text-xs text-slate-500">
+            {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"}
+          </span>
         </div>
       </form>
 
