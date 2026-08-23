@@ -1,10 +1,10 @@
 import type { Urgency } from "@/lib/types";
 
 const URGENCY_STYLES: Record<Urgency, string> = {
-  low: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  medium: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-  high: "border-orange-400/30 bg-orange-400/10 text-orange-200",
-  critical: "border-rose-400/40 bg-rose-500/15 text-rose-200",
+  low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  medium: "border-amber-200 bg-amber-50 text-amber-700",
+  high: "border-orange-200 bg-orange-50 text-orange-700",
+  critical: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
 export function UrgencyBadge({ urgency }: { urgency: Urgency }) {
@@ -23,12 +23,10 @@ export function SourceBadge({ source }: { source: "live" | "mock" }) {
   return (
     <span
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
-        live
-          ? "border-sky-400/30 bg-sky-400/10 text-sky-200"
-          : "border-slate-400/20 bg-slate-400/10 text-slate-300"
+        live ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-100 text-slate-600"
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-sky-300" : "bg-slate-400"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-blue-500" : "bg-slate-400"}`} />
       {live ? "Live AI" : "Mock fallback"}
     </span>
   );
@@ -36,9 +34,9 @@ export function SourceBadge({ source }: { source: "live" | "mock" }) {
 
 export function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <p className="label">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-100">{value}</p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
     </div>
   );
 }

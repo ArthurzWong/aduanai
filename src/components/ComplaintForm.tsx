@@ -42,100 +42,110 @@ export function ComplaintForm({
   }
 
   return (
-    <section className="card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Lodge a complaint</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Write in Malay, English or a mix. AduanAI extracts the structure and routes it.
-          </p>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
-          <input
-            type="checkbox"
-            checked={mockMode}
-            onChange={(event) => onMockModeChange(event.target.checked)}
-            className="h-3.5 w-3.5 accent-sky-400"
-          />
-          Demo mock mode
+    <form
+      className="space-y-5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <div>
+        <label htmlFor="complaint" className="text-sm font-medium text-slate-800">
+          What happened?
         </label>
-      </div>
-
-      <form
-        className="mt-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit();
-        }}
-      >
+        <p className="mt-1 text-xs text-slate-500">Write in Malay, English or a mix — AduanAI structures and routes it.</p>
         <textarea
+          id="complaint"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={5}
           placeholder="Contoh: Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor."
-          className="w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+          className="input mt-3 resize-none p-4"
         />
+        <p className="mt-2 text-xs text-slate-400">
+          {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"}
+        </p>
+      </div>
 
-        <div className="mt-4 rounded-xl border border-dashed border-white/15 bg-slate-950/40 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-100">Photo evidence</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Attach up to {MAX_PHOTOS} photos ({formatBytes(MAX_PHOTO_BYTES)} each) to substantiate the complaint.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={photos.length >= MAX_PHOTOS}
-              className="rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-sky-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Upload photos
-            </button>
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Photo evidence</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Attach up to {MAX_PHOTOS} photos ({formatBytes(MAX_PHOTO_BYTES)} each) to substantiate the complaint.
+            </p>
           </div>
-
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(event) => void addFiles(event.target.files)}
-          />
-
-          {photos.length > 0 ? (
-            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {photos.map((photo) => (
-                <li key={photo.id} className="group relative overflow-hidden rounded-xl border border-white/10">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => onPhotosChange(photos.filter((item) => item.id !== photo.id))}
-                    aria-label={`Remove ${photo.name}`}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-xs text-slate-200 transition hover:bg-rose-500 hover:text-white"
-                  >
-                    ×
-                  </button>
-                  <p className="truncate bg-slate-950/80 px-2 py-1 text-[10px] text-slate-400">
-                    {photo.name} · {formatBytes(photo.size)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {photoError ? <p className="mt-3 text-xs text-amber-300">{photoError}</p> : null}
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={photos.length >= MAX_PHOTOS} className="btn-ghost py-2 text-xs">
+            Upload photos
+          </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Triaging…" : "Triage complaint"}
-          </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => void addFiles(event.target.files)}
+        />
+
+        {photos.length > 0 ? (
+          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {photos.map((photo) => (
+              <li key={photo.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => onPhotosChange(photos.filter((item) => item.id !== photo.id))}
+                  aria-label={`Remove ${photo.name}`}
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-xs text-slate-600 shadow transition hover:bg-rose-500 hover:text-white"
+                >
+                  ×
+                </button>
+                <p className="truncate px-2 py-1 text-[10px] text-slate-500">
+                  {photo.name} · {formatBytes(photo.size)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {photoError ? <p className="mt-3 text-xs text-amber-600">{photoError}</p> : null}
+      </div>
+
+      <div>
+        <p className="label">Sample complaints</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {SAMPLE_PROMPTS.map((prompt) => (
+            <button
+              key={prompt.label}
+              type="button"
+              onClick={() => onChange(prompt.text)}
+              className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-blue-400 hover:bg-blue-50/40"
+            >
+              <p className="text-sm font-medium text-slate-800">{prompt.label}</p>
+              <p className="mt-1 text-xs text-slate-500">{prompt.hint}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={mockMode}
+            onChange={(event) => onMockModeChange(event.target.checked)}
+            className="h-3.5 w-3.5 accent-blue-600"
+          />
+          Force demo mock mode
+        </label>
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -143,36 +153,15 @@ export function ComplaintForm({
               onPhotosChange([]);
               setPhotoError(null);
             }}
-            className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 transition hover:border-white/25 hover:text-white"
+            className="btn-ghost"
           >
             Clear
           </button>
-          <span className="text-xs text-slate-500">
-            {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"}
-          </span>
-        </div>
-      </form>
-
-      {error ? (
-        <p className="mt-4 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>
-      ) : null}
-
-      <div className="mt-6">
-        <p className="label">Sample prompts</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {SAMPLE_PROMPTS.map((prompt) => (
-            <button
-              key={prompt.label}
-              type="button"
-              onClick={() => onChange(prompt.text)}
-              className="rounded-xl border border-white/10 bg-slate-900/40 p-3 text-left transition hover:border-sky-400/40 hover:bg-slate-900/70"
-            >
-              <p className="text-sm font-medium text-slate-100">{prompt.label}</p>
-              <p className="mt-1 text-xs text-slate-400">{prompt.hint}</p>
-            </button>
-          ))}
+          <button type="submit" disabled={loading} className="btn-primary">
+            {loading ? "Triaging…" : "Triage complaint"}
+          </button>
         </div>
       </div>
-    </section>
+    </form>
   );
 }
