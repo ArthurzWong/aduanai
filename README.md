@@ -37,9 +37,9 @@ If the key is missing, the request fails, times out (12s), or the model returns 
 
 ## Core flow
 
-1. User pastes a complaint (Malay / English / mixed).
+1. User pastes a complaint (Malay / English / mixed) and optionally attaches photo evidence.
 2. `POST /api/triage` returns structured JSON validated against the schema.
-3. Dashboard renders the triage card, agency routing, next steps and status tracker.
+3. Dashboard renders the triage card, attached photos, agency routing, next steps and status tracker.
 4. User exports markdown (download / copy) or copies raw JSON.
 
 ## Core JSON schema
@@ -111,7 +111,7 @@ src/
     api/triage/route.ts     # triage endpoint: live model + mock fallback
     page.tsx                # dashboard
   components/
-    ComplaintForm.tsx       # input + sample prompts + mock toggle
+    ComplaintForm.tsx       # input + photo uploads + sample prompts + mock toggle
     TriageResult.tsx        # triage / JSON / markdown tabs + export
     StatusTracker.tsx       # 5-stage status card + agency channel
     ui.tsx                  # urgency & source badges, fields
@@ -119,6 +119,7 @@ src/
     triage-engine.ts        # deterministic rule-based triage
     agencies.ts             # agency registry + submission channels
     markdown.ts             # markdown report + reference numbers
+    photos.ts               # photo validation, previews, size formatting
     sample-prompts.ts       # demo prompts
     types.ts                # shared schema types
 ```
@@ -126,3 +127,5 @@ src/
 ## Scope notes
 
 Complaints are kept in browser state for the demo (no database), and status advancement is manual — both are deliberate to keep the hackathon flow reliable.
+
+Photo evidence (up to 4 images, 5 MB each) is read in the browser and never uploaded to a server, so there is no storage bucket to provision for the demo. The markdown export lists the attached filenames and sizes; wiring real uploads (S3 / Vercel Blob) is the natural next step for production.

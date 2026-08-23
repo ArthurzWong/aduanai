@@ -18,12 +18,20 @@ export interface TriageResponse {
   notice?: string;
 }
 
+export interface ComplaintPhoto {
+  id: string;
+  name: string;
+  size: number;
+  dataUrl: string;
+}
+
 export interface ComplaintRecord extends Triage {
   id: string;
   reference: string;
   input: string;
   createdAt: string;
   source: "live" | "mock";
+  photos: ComplaintPhoto[];
 }
 
 export const URGENCIES: Urgency[] = ["low", "medium", "high", "critical"];
