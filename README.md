@@ -1,36 +1,128 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AduanAI
 
-## Getting Started
+**Intelligent Public Complaint & Service Request Triage for Malaysia.**
 
-First, run the development server:
+AduanAI turns a messy, code-switched complaint ("Tolong, ada lubang besar di Jalan Ampang…") into a structured, agency-routed service request with an urgency rating, clear next steps, a status card, and a markdown report you can paste into any official complaint channel.
+
+## Why
+
+Malaysians file complaints in Malay, English and Manglish across a dozen agencies (DBKL, JKR, IWK, SWCorp, Air Selangor, TNB, JPJ, KKM, DOE). Most complaints stall because they land at the wrong agency, lack location detail, or have no urgency signal. AduanAI does that triage in one step.
+
+## Stack
+
+- Next.js 14 (App Router) + TypeScript
+- Tailwind CSS
+- One API route (`POST /api/triage`)
+- Live LLM triage with a **deterministic rule-based mock fallback** — the demo never breaks
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No API key needed: with no `OPENAI_API_KEY` set, AduanAI runs the built-in mock triage engine and the full flow works offline.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Optional live AI mode
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env.local
+# OPENAI_API_KEY=sk-...
+# AI_MODEL=gpt-4o-mini            (optional)
+# OPENAI_BASE_URL=https://api.openai.com/v1   (optional, any OpenAI-compatible endpoint)
+```
 
-## Learn More
+If the key is missing, the request fails, times out (12s), or the model returns off-schema JSON, the API automatically falls back to the mock engine and the UI shows a "Mock fallback" badge with the reason. Toggle **Demo mock mode** in the UI to force the deterministic path.
 
-To learn more about Next.js, take a look at the following resources:
+## Core flow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. User pastes a complaint (Malay / English / mixed).
+2. `POST /api/triage` returns structured JSON validated against the schema.
+3. Dashboard renders the triage card, agency routing, next steps and status tracker.
+4. User exports markdown (download / copy) or copies raw JSON.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Core JSON schema
 
-## Deploy on Vercel
+```json
+{
+  "complaintType": "",
+  "location": "",
+  "urgency": "low|medium|high|critical",
+  "agency": "",
+  "summary": "",
+  "steps": [],
+  "status": "",
+  "nextAction": ""
+}
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`POST /api/triage`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```json
+// request
+{ "complaint": "Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor.", "mock": false }
+
+// response
+{ "triage": { /* schema above */ }, "source": "live" | "mock", "model": "gpt-4o-mini", "notice": "…" }
+```
+
+## Demo scenario (30 seconds)
+
+Input:
+
+> Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor.
+
+Output:
+
+| Field | Value |
+| --- | --- |
+| complaintType | `infrastructure` |
+| location | `Jalan Ampang, near KLCC, Kuala Lumpur` |
+| urgency | `high` |
+| agency | `DBKL` (Dewan Bandaraya Kuala Lumpur) |
+| nextAction | Submit the report to DBKL road maintenance and request temporary hazard signage today |
+
+Then: **Advance status** to walk the tracker (Received → Triaged → Routed → In progress → Resolved) and **Download markdown** for the filled report.
+
+## Sample prompts
+
+Also available as one-click buttons in the UI (see `src/lib/sample-prompts.ts`):
+
+| Prompt | Expected triage |
+| --- | --- |
+| Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor. | infrastructure · high · DBKL |
+| Sampah tak dikutip dah seminggu di Jalan Cheras, busuk dan banyak lalat. | waste management · SWCorp |
+| Air tak keluar sejak semalam di Seksyen 7 Shah Alam, ada baby kat rumah. | water supply · high · Air Selangor |
+| Banjir kilat di Taman Desa Kuala Lumpur, air masuk rumah dan longkang melimpah. | flooding · critical · DBKL |
+| The street lights along Jalan Bukit Bintang have been out for two weeks and it feels unsafe at night. | street lighting · DBKL |
+| Kumbahan melimpah dari manhole depan rumah di Jalan SS2/24 Petaling Jaya, sangat busuk. | sewerage · high · IWK |
+
+## How triage works
+
+- **Live mode** — a JSON-only system prompt constrains the model to the schema and the known agency list; the response is schema-validated before use.
+- **Mock mode** — a keyword-scored rule engine (`src/lib/triage-engine.ts`) covering 11 complaint categories, bilingual keyword sets, urgency escalation hints ("bahaya", "banjir", "kemalangan"), road/landmark/city extraction, and KL-vs-outside routing (DBKL vs JKR vs local council).
+
+## Project structure
+
+```
+src/
+  app/
+    api/triage/route.ts     # triage endpoint: live model + mock fallback
+    page.tsx                # dashboard
+  components/
+    ComplaintForm.tsx       # input + sample prompts + mock toggle
+    TriageResult.tsx        # triage / JSON / markdown tabs + export
+    StatusTracker.tsx       # 5-stage status card + agency channel
+    ui.tsx                  # urgency & source badges, fields
+  lib/
+    triage-engine.ts        # deterministic rule-based triage
+    agencies.ts             # agency registry + submission channels
+    markdown.ts             # markdown report + reference numbers
+    sample-prompts.ts       # demo prompts
+    types.ts                # shared schema types
+```
+
+## Scope notes
+
+Complaints are kept in browser state for the demo (no database), and status advancement is manual — both are deliberate to keep the hackathon flow reliable.
