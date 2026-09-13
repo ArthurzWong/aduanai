@@ -1,103 +1,41 @@
 import { NextResponse } from "next/server";
-import { AGENCIES } from "@/lib/agencies";
+import { resolveCredentials, triageWithModel } from "@/lib/ai";
+import { enrichTriage } from "@/lib/enrich";
 import { triageWithRules } from "@/lib/triage-engine";
-import { isUrgency, type Triage, type TriageResponse } from "@/lib/types";
+import type { TriageResponse } from "@/lib/types";
 
-const LIVE_TIMEOUT_MS = 12_000;
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
-const SYSTEM_PROMPT = `You are AduanAI, a triage assistant for Malaysian public complaints and service requests.
-Complaints may be in Malay, English or mixed Manglish. Reply with JSON only, no prose, matching:
-{"complaintType":"","location":"","urgency":"low|medium|high|critical","agency":"","summary":"","steps":[],"status":"","nextAction":""}
-Rules:
-- "agency" must be one of: ${Object.keys(AGENCIES).join(", ")}.
-- Kuala Lumpur municipal issues (potholes, drains, street lighting, flooding) route to DBKL.
-- "urgency" reflects public safety risk: hazards to motorcyclists, children or homes are at least "high"; life threatening or widespread damage is "critical".
-- "steps" holds 3 to 5 short imperative actions written in English.
-- "summary" is one or two sentences in English.
-- "status" describes the current triage state, e.g. "Received — triaged and ready for submission".
-- "nextAction" is the single most important immediate action.`;
-
-function isTriage(value: unknown): value is Triage {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.complaintType === "string" &&
-    candidate.complaintType.length > 0 &&
-    typeof candidate.location === "string" &&
-    isUrgency(candidate.urgency) &&
-    typeof candidate.agency === "string" &&
-    candidate.agency.length > 0 &&
-    typeof candidate.summary === "string" &&
-    Array.isArray(candidate.steps) &&
-    candidate.steps.length > 0 &&
-    candidate.steps.every((step) => typeof step === "string") &&
-    typeof candidate.status === "string" &&
-    typeof candidate.nextAction === "string"
-  );
-}
-
-function parseModelJson(content: string): unknown {
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1] : content;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("model response contained no JSON object");
-  return JSON.parse(raw.slice(start, end + 1));
-}
-
-async function triageWithModel(complaint: string): Promise<{ triage: Triage; model: string }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
-
-  const baseUrl = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
-  const model = process.env.AI_MODEL ?? "gpt-4o-mini";
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
-  try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: complaint },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`model request failed with status ${response.status}`);
-    }
-
-    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) throw new Error("model response was empty");
-
-    const parsed = parseModelJson(content);
-    if (!isTriage(parsed)) throw new Error("model response did not match the AduanAI schema");
-
-    return { triage: { ...parsed, steps: parsed.steps.slice(0, 6) }, model };
-  } finally {
-    clearTimeout(timer);
-  }
+function safeReason(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "unknown error";
+  return raw
+    .replace(/sk-[A-Za-z0-9_*\-]{6,}/g, "sk-***")
+    .replace(/Bearer\s+\S+/gi, "Bearer ***")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
 }
 
 export async function POST(request: Request) {
   let complaint = "";
-  let forceMock = false;
+  let forceOffline = false;
+  let enrich = true;
+  let credentials: ReturnType<typeof resolveCredentials> = null;
 
   try {
-    const body = (await request.json()) as { complaint?: unknown; mock?: unknown };
+    const body = (await request.json()) as {
+      complaint?: unknown;
+      mock?: unknown;
+      enrich?: unknown;
+      apiKey?: unknown;
+      model?: unknown;
+      baseUrl?: unknown;
+    };
     complaint = typeof body.complaint === "string" ? body.complaint.trim() : "";
-    forceMock = body.mock === true;
+    forceOffline = body.mock === true;
+    enrich = body.enrich !== false;
+    credentials = forceOffline ? null : resolveCredentials(body);
   } catch {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
@@ -109,28 +47,45 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!forceMock && process.env.OPENAI_API_KEY) {
+  const startedAt = Date.now();
+
+  // Live model first. Only fall back to the deterministic engine when the live
+  // call is unavailable or fails, and always say why.
+  if (credentials) {
     try {
-      const { triage, model } = await triageWithModel(complaint);
-      const result: TriageResponse = { triage, source: "live", model };
+      const { triage, model } = await triageWithModel(complaint, credentials);
+      const enrichment = enrich ? await enrichTriage(triage) : null;
+      const result: TriageResponse = {
+        triage,
+        source: "live",
+        model,
+        enrichment,
+        latencyMs: Date.now() - startedAt,
+      };
       return NextResponse.json(result);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "unknown error";
+      const reason = safeReason(error);
+      const triage = triageWithRules(complaint);
       const result: TriageResponse = {
-        triage: triageWithRules(complaint),
+        triage,
         source: "mock",
-        notice: `Live model unavailable (${reason}). Showing deterministic mock triage.`,
+        notice: `Live AI could not complete this triage (${reason}). Showing the deterministic rule-engine result instead.`,
+        enrichment: enrich ? await enrichTriage(triage) : null,
+        latencyMs: Date.now() - startedAt,
       };
       return NextResponse.json(result);
     }
   }
 
+  const triage = triageWithRules(complaint);
   const result: TriageResponse = {
-    triage: triageWithRules(complaint),
+    triage,
     source: "mock",
-    notice: forceMock
-      ? "Mock mode is on — triage produced by the deterministic rule engine."
-      : "No OPENAI_API_KEY configured — triage produced by the deterministic mock engine.",
+    notice: forceOffline
+      ? "Offline mode is on — triage produced by the deterministic rule engine."
+      : "Live AI is not configured yet. Add your OpenAI-compatible API key in AI settings (or set OPENAI_API_KEY on the server) to triage with a live model. Showing the deterministic rule-engine result for now.",
+    enrichment: enrich ? await enrichTriage(triage) : null,
+    latencyMs: Date.now() - startedAt,
   };
   return NextResponse.json(result);
 }

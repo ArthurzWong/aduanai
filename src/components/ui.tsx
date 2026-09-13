@@ -1,16 +1,18 @@
+import type { ReactNode } from "react";
 import type { Urgency } from "@/lib/types";
 
+// Warm urgency ramp: reserved green for low, gold -> ember -> crimson as severity rises.
 const URGENCY_STYLES: Record<Urgency, string> = {
-  low: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  high: "border-orange-200 bg-orange-50 text-orange-700",
-  critical: "border-rose-200 bg-rose-50 text-rose-700",
+  low: "border-palm-100 bg-palm-100/70 text-palm-700",
+  medium: "border-gold-300 bg-gold-100 text-gold-700",
+  high: "border-ember-300 bg-ember-100 text-ember-800",
+  critical: "border-red-200 bg-red-100 text-red-800",
 };
 
 export function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${URGENCY_STYLES[urgency]}`}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${URGENCY_STYLES[urgency]}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {urgency}
@@ -22,11 +24,11 @@ export function SourceBadge({ source }: { source: "live" | "mock" }) {
   const live = source === "live";
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
-        live ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-100 text-slate-600"
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${
+        live ? "border-ember-200 bg-ember-50 text-ember-700" : "border-line bg-surface-muted text-ink-700"
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-blue-500" : "bg-slate-400"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ember-500" : "bg-ink-400"}`} />
       {live ? "Live AI" : "Mock fallback"}
     </span>
   );
@@ -34,9 +36,28 @@ export function SourceBadge({ source }: { source: "live" | "mock" }) {
 
 export function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-xl border border-line bg-surface-muted p-4">
       <p className="label">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+      <p className="mt-1 break-words text-sm font-medium text-foreground">{value}</p>
     </div>
+  );
+}
+
+export function Chip({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "ember" | "dark";
+}) {
+  const tones: Record<"neutral" | "ember" | "dark", string> = {
+    neutral: "border-line bg-surface text-ink-600",
+    ember: "border-ember-200 bg-ember-50 text-ember-700",
+    dark: "border-white/15 bg-white/[0.06] text-ink-100",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${tones[tone]}`}>
+      {children}
+    </span>
   );
 }

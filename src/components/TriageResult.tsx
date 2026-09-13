@@ -27,6 +27,7 @@ export function TriageResult({ record }: Props) {
           steps: record.steps,
           status: record.status,
           nextAction: record.nextAction,
+          enrichment: record.enrichment ?? null,
         },
         null,
         2,
@@ -34,15 +35,26 @@ export function TriageResult({ record }: Props) {
     [record],
   );
 
-  async function copy(kind: "json" | "markdown") {
-    const text = kind === "json" ? json : markdown;
+  async function copy(kind: "json" | "markdown" | "reference", text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(kind);
-      setTimeout(() => setCopied(null), 2000);
     } catch {
-      setCopied(null);
+      // clipboard may be blocked on insecure origins — fall back to a temp field
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(area);
     }
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   function download() {
@@ -55,12 +67,21 @@ export function TriageResult({ record }: Props) {
     URL.revokeObjectURL(url);
   }
 
+  const enrichment = record.enrichment;
+
   return (
-    <section className="card">
+    <section className="card animate-rise-in">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label">{record.reference}</p>
-          <h2 className="mt-1 text-xl font-semibold capitalize text-slate-900">{record.complaintType} complaint</h2>
+          <h2 className="mt-1 font-display text-xl font-bold capitalize tracking-tight text-foreground">
+            {record.complaintType} complaint
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            {record.source === "live"
+              ? `Live model${record.model ? ` · ${record.model}` : ""}`
+              : "Deterministic rule engine"}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <UrgencyBadge urgency={record.urgency} />
@@ -68,17 +89,18 @@ export function TriageResult({ record }: Props) {
         </div>
       </div>
 
-      <div className="mt-5 flex gap-1 rounded-xl bg-slate-100 p-1 text-xs">
-        {(["triage", "json", "markdown"] as const).map((key) => (
+      <div className="mt-5 flex gap-1 rounded-xl bg-surface-muted p-1 text-xs">
+        {([["triage", "Triage"], ["json", "JSON"], ["markdown", "Markdown"]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`flex-1 rounded-lg px-3 py-2 font-medium capitalize transition ${
-              tab === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            aria-pressed={tab === key}
+            className={`flex-1 rounded-lg px-3 py-2 font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-300 ${
+              tab === key ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-ink-800"
             }`}
           >
-            {key}
+            {label}
           </button>
         ))}
       </div>
@@ -93,7 +115,7 @@ export function TriageResult({ record }: Props) {
 
           <div>
             <p className="label">Summary</p>
-            <p className="mt-2 text-sm leading-relaxed text-slate-700">{record.summary}</p>
+            <p className="mt-2 text-sm leading-relaxed text-ink-700">{record.summary}</p>
           </div>
 
           <div>
@@ -102,9 +124,9 @@ export function TriageResult({ record }: Props) {
               {record.steps.map((step, index) => (
                 <li
                   key={step}
-                  className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+                  className="flex gap-3 rounded-xl border border-line bg-surface-muted p-3 text-sm text-ink-700"
                 >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ember-100 text-[10px] font-bold text-ember-700">
                     {index + 1}
                   </span>
                   {step}
@@ -113,42 +135,99 @@ export function TriageResult({ record }: Props) {
             </ol>
           </div>
 
+          {enrichment ? (
+            <div className="rounded-xl border border-line bg-surface-muted p-4">
+              <p className="label">Live context</p>
+              {enrichment.resolved ? (
+                <p className="mt-1 text-sm text-ink-800">
+                  Location verified as <span className="font-medium">{enrichment.resolved}</span>
+                  {enrichment.latitude !== null && enrichment.longitude !== null ? (
+                    <span className="text-muted">
+                      {" "}
+                      · {enrichment.latitude.toFixed(4)}, {enrichment.longitude.toFixed(4)}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-muted">
+                  Could not confirm this location from open data. Add a road name, area or postcode for a precise pin.
+                </p>
+              )}
+              {enrichment.weather ? (
+                <p className="mt-2 text-sm text-ink-800">
+                  Now at the site: <span className="font-medium">{enrichment.weather.summary}</span>
+                  {enrichment.weather.temperatureC !== null ? `, ${Math.round(enrichment.weather.temperatureC)}°C` : ""}
+                  {enrichment.weather.rainTodayMm !== null
+                    ? ` · ${enrichment.weather.rainTodayMm.toFixed(1)} mm rain forecast today`
+                    : ""}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {enrichment.mapUrl ? (
+                  <a
+                    href={enrichment.mapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-ghost py-1.5 text-xs"
+                  >
+                    Open map pin
+                  </a>
+                ) : null}
+                <span className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] text-muted">
+                  {enrichment.source}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           <div>
             <p className="label">Photo evidence</p>
             {record.photos.length > 0 ? (
               <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {record.photos.map((photo) => (
-                  <li key={photo.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <a href={photo.dataUrl} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover transition hover:opacity-80" />
-                    </a>
-                    <p className="truncate px-2 py-1 text-[10px] text-slate-500">
+                  <li key={photo.id} className="overflow-hidden rounded-xl border border-line bg-surface">
+                    {photo.dataUrl ? (
+                      <a href={photo.dataUrl} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.dataUrl}
+                          alt={photo.name}
+                          className="h-24 w-full object-cover transition hover:opacity-80"
+                        />
+                      </a>
+                    ) : (
+                      <div className="flex h-24 w-full items-center justify-center bg-surface-muted px-2 text-center text-[10px] text-muted">
+                        Photo not kept after reload
+                      </div>
+                    )}
+                    <p className="truncate px-2 py-1 text-[10px] text-muted">
                       {photo.name} · {formatBytes(photo.size)}
                     </p>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">No photos attached to this complaint.</p>
+              <p className="mt-2 rounded-xl border border-dashed border-line bg-surface-muted px-4 py-6 text-center text-xs text-muted">
+                No photos attached to this complaint.
+              </p>
             )}
           </div>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <p className="label text-blue-700">Next action</p>
-            <p className="mt-1 text-sm font-medium text-blue-900">{record.nextAction}</p>
+          <div className="rounded-xl border border-ember-200 bg-ember-50 p-4">
+            <p className="label text-ember-700">Next action</p>
+            <p className="mt-1 text-sm font-medium text-ember-900">{record.nextAction}</p>
           </div>
         </div>
       ) : null}
 
       {tab === "json" ? (
-        <pre className="mt-5 max-h-96 overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-4 text-xs leading-relaxed text-emerald-200">
+        <pre className="mt-5 max-h-96 overflow-auto rounded-xl border border-ink-800 bg-ink-950 p-4 text-xs leading-relaxed text-ember-300">
           {json}
         </pre>
       ) : null}
 
       {tab === "markdown" ? (
-        <pre className="mt-5 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
+        <pre className="mt-5 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface-muted p-4 text-xs leading-relaxed text-ink-700">
           {markdown}
         </pre>
       ) : null}
@@ -157,11 +236,22 @@ export function TriageResult({ record }: Props) {
         <button type="button" onClick={download} className="btn-primary py-2 text-xs">
           Download markdown
         </button>
-        <button type="button" onClick={() => copy("markdown")} className="btn-ghost py-2 text-xs">
+        <button
+          type="button"
+          onClick={() => copy("markdown", markdown)}
+          className="btn-ghost py-2 text-xs"
+        >
           {copied === "markdown" ? "Copied!" : "Copy markdown"}
         </button>
-        <button type="button" onClick={() => copy("json")} className="btn-ghost py-2 text-xs">
+        <button type="button" onClick={() => copy("json", json)} className="btn-ghost py-2 text-xs">
           {copied === "json" ? "Copied!" : "Copy JSON"}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy("reference", record.reference)}
+          className="btn-ghost py-2 text-xs"
+        >
+          {copied === "reference" ? "Copied!" : "Copy reference"}
         </button>
       </div>
     </section>

@@ -24,16 +24,35 @@ npm run dev     # http://localhost:3000
 
 No API key needed: with no `OPENAI_API_KEY` set, AduanAI runs the built-in mock triage engine and the full flow works offline.
 
-### Optional live AI mode
+### Live AI mode (default path)
+
+AduanAI triages with a live model whenever a key is available. Two ways to provide one:
+
+1. **Server env** - set `OPENAI_API_KEY` (and optionally `AI_MODEL`, `OPENAI_BASE_URL`):
 
 ```bash
 cp .env.example .env.local
-# OPENAI_API_KEY=sk-...
-# AI_MODEL=gpt-4o-mini            (optional)
+# OPENAI_API_KEY=***
+# AI_MODEL=gpt-4o-mini                        (optional)
 # OPENAI_BASE_URL=https://api.openai.com/v1   (optional, any OpenAI-compatible endpoint)
 ```
 
-If the key is missing, the request fails, times out (12s), or the model returns off-schema JSON, the API automatically falls back to the mock engine and the UI shows a "Mock fallback" badge with the reason. Toggle **Demo mock mode** in the UI to force the deterministic path.
+2. **In-app AI settings** - open the panel from the header pill and paste an API key, model and base URL. The key is kept in this browser's `localStorage` and sent only with each triage request; it is never stored server-side or written to logs. Use **Test connection** to confirm the model responds.
+
+Failure handling is explicit: if the key is missing, the request times out (25s), or the model returns off-schema JSON, the API retries once (dropping `response_format` for providers that reject it), then falls back to the deterministic rule engine and the UI shows a **Mock fallback** badge with the reason. Toggle **Offline rule engine** in the form or settings to skip the live model entirely.
+
+### Live context (real data)
+
+Every triage response is enriched with keyless public open data:
+
+- **Geocoding** - the extracted location is resolved to coordinates via the Open-Meteo geocoding API, with progressive fallback from full street text down to city/state.
+- **Weather** - for flooding, water, drainage, waste and infrastructure complaints, current conditions and today's forecast rainfall are fetched for the resolved coordinates.
+
+Both are cached in memory for 30 minutes, shown in the **Live context** panel of the triage card, and included in the markdown export (place, map pin, weather).
+
+### Session persistence and duplicate detection
+
+Complaints, status stages and stage timestamps are kept in `localStorage`, so the dashboard survives a reload. Photo image data is intentionally not persisted (it can exceed the storage quota); restored records keep the filename and size and mark the thumbnail as not stored. The complaint form also checks incoming text against existing records and flags **possible duplicates** with links to the earlier complaint.
 
 ## Core flow
 
