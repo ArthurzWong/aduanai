@@ -33,14 +33,14 @@ interface Props {
 
 export function Sidebar({ view, onViewChange, counts }: Props) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white px-4 py-6 lg:flex">
+    <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-ink-800 bg-ink-900 px-4 py-6 lg:flex">
       <div className="flex items-center gap-3 px-2">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-ember-400 to-ember-600 text-sm font-black text-white shadow-[0_12px_26px_-14px_rgba(226,89,11,0.95)]">
           AI
         </span>
         <div>
-          <p className="text-base font-bold tracking-tight text-slate-900">AduanAI</p>
-          <p className="text-xs text-slate-500">Complaint triage</p>
+          <p className="font-display text-base font-extrabold tracking-tight text-white">AduanAI</p>
+          <p className="text-xs text-ink-300">Complaint triage</p>
         </div>
       </div>
 
@@ -52,8 +52,9 @@ export function Sidebar({ view, onViewChange, counts }: Props) {
               key={item.id}
               type="button"
               onClick={() => onViewChange(item.id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                active ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              aria-current={active ? "page" : undefined}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-400 ${
+                active ? "bg-ember-500/15 text-ember-200" : "text-ink-300 hover:bg-white/[0.06] hover:text-white"
               }`}
             >
               <svg
@@ -72,22 +73,22 @@ export function Sidebar({ view, onViewChange, counts }: Props) {
               {counts[item.id] > 0 ? (
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
+                    active ? "bg-ember-500 text-white" : "bg-white/10 text-ink-100"
                   }`}
                 >
                   {counts[item.id]}
                 </span>
               ) : (
-                <span className="text-[11px] text-slate-400">{item.hint}</span>
+                <span className="text-[11px] text-ink-300">{item.hint}</span>
               )}
             </button>
           );
         })}
       </nav>
 
-      <div className="mt-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p className="text-xs font-semibold text-slate-700">Demo-safe mode</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+      <div className="mt-auto rounded-xl border border-ink-800 bg-white/[0.04] p-4">
+        <p className="text-xs font-semibold text-ink-100">Demo-safe mode</p>
+        <p className="mt-1 text-xs leading-relaxed text-ink-300">
           Without an AI key AduanAI runs a deterministic rule engine, so the flow never breaks on stage.
         </p>
       </div>
@@ -97,14 +98,16 @@ export function Sidebar({ view, onViewChange, counts }: Props) {
 
 export function MobileNav({ view, onViewChange }: Omit<Props, "counts">) {
   return (
-    <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 lg:hidden">
+    <div className="flex gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card lg:hidden">
       {NAV.map((item) => (
         <button
           key={item.id}
           type="button"
           onClick={() => onViewChange(item.id)}
-          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-            item.id === view ? "bg-blue-600 text-white" : "text-slate-600"
+          className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition ${
+            item.id === view
+              ? "bg-ember-500 text-white shadow-[0_12px_22px_-14px_rgba(226,89,11,0.95)]"
+              : "text-ink-500 hover:text-ink-900"
           }`}
         >
           {item.label}

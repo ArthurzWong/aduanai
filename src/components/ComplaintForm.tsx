@@ -50,10 +50,10 @@ export function ComplaintForm({
       }}
     >
       <div>
-        <label htmlFor="complaint" className="text-sm font-medium text-slate-800">
+        <label htmlFor="complaint" className="text-sm font-medium text-ink-800">
           What happened?
         </label>
-        <p className="mt-1 text-xs text-slate-500">Write in Malay, English or a mix — AduanAI structures and routes it.</p>
+        <p className="mt-1 text-xs text-muted">Write in Malay, English or a mix — AduanAI structures and routes it.</p>
         <textarea
           id="complaint"
           value={value}
@@ -62,20 +62,25 @@ export function ComplaintForm({
           placeholder="Contoh: Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor."
           className="input mt-3 resize-none p-4"
         />
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-ink-400">
           {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"}
         </p>
       </div>
 
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+      <div className="rounded-xl border border-dashed border-line-strong bg-surface-muted p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-slate-800">Photo evidence</p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="text-sm font-medium text-ink-800">Photo evidence</p>
+            <p className="mt-1 text-xs text-muted">
               Attach up to {MAX_PHOTOS} photos ({formatBytes(MAX_PHOTO_BYTES)} each) to substantiate the complaint.
             </p>
           </div>
-          <button type="button" onClick={() => inputRef.current?.click()} disabled={photos.length >= MAX_PHOTOS} className="btn-ghost py-2 text-xs">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={photos.length >= MAX_PHOTOS}
+            className="btn-ghost py-2 text-xs"
+          >
             Upload photos
           </button>
         </div>
@@ -92,18 +97,18 @@ export function ComplaintForm({
         {photos.length > 0 ? (
           <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {photos.map((photo) => (
-              <li key={photo.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <li key={photo.id} className="relative overflow-hidden rounded-xl border border-line bg-surface">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={photo.dataUrl} alt={photo.name} className="h-24 w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => onPhotosChange(photos.filter((item) => item.id !== photo.id))}
                   aria-label={`Remove ${photo.name}`}
-                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-xs text-slate-600 shadow transition hover:bg-rose-500 hover:text-white"
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-surface/90 text-xs text-ink-600 shadow transition hover:bg-red-500 hover:text-white"
                 >
                   ×
                 </button>
-                <p className="truncate px-2 py-1 text-[10px] text-slate-500">
+                <p className="truncate px-2 py-1 text-[10px] text-muted">
                   {photo.name} · {formatBytes(photo.size)}
                 </p>
               </li>
@@ -111,7 +116,11 @@ export function ComplaintForm({
           </ul>
         ) : null}
 
-        {photoError ? <p className="mt-3 text-xs text-amber-600">{photoError}</p> : null}
+        {photoError ? (
+          <p role="alert" className="mt-3 text-xs text-ember-700">
+            {photoError}
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -122,26 +131,28 @@ export function ComplaintForm({
               key={prompt.label}
               type="button"
               onClick={() => onChange(prompt.text)}
-              className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-blue-400 hover:bg-blue-50/40"
+              className="rounded-xl border border-line bg-surface p-3 text-left transition hover:border-ember-300 hover:bg-ember-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-300"
             >
-              <p className="text-sm font-medium text-slate-800">{prompt.label}</p>
-              <p className="mt-1 text-xs text-slate-500">{prompt.hint}</p>
+              <p className="text-sm font-medium text-ink-800">{prompt.label}</p>
+              <p className="mt-1 text-xs text-muted">{prompt.hint}</p>
             </button>
           ))}
         </div>
       </div>
 
       {error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-600">
           <input
             type="checkbox"
             checked={mockMode}
             onChange={(event) => onMockModeChange(event.target.checked)}
-            className="h-3.5 w-3.5 accent-blue-600"
+            className="h-3.5 w-3.5 accent-ember-500"
           />
           Force demo mock mode
         </label>
