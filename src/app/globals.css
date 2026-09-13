@@ -67,7 +67,7 @@ body {
   }
 
   .input {
-    @apply w-full rounded-xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-ink-400 transition
+    @apply w-full rounded-xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-ink-500 transition
       focus:border-ember-400 focus:outline-none focus:ring-2 focus:ring-ember-400/25;
   }
 

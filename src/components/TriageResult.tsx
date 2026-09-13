@@ -27,6 +27,7 @@ export function TriageResult({ record }: Props) {
           steps: record.steps,
           status: record.status,
           nextAction: record.nextAction,
+          enrichment: record.enrichment ?? null,
         },
         null,
         2,
@@ -34,15 +35,26 @@ export function TriageResult({ record }: Props) {
     [record],
   );
 
-  async function copy(kind: "json" | "markdown") {
-    const text = kind === "json" ? json : markdown;
+  async function copy(kind: "json" | "markdown" | "reference", text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(kind);
-      setTimeout(() => setCopied(null), 2000);
     } catch {
-      setCopied(null);
+      // clipboard may be blocked on insecure origins — fall back to a temp field
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(area);
     }
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   function download() {
@@ -55,6 +67,8 @@ export function TriageResult({ record }: Props) {
     URL.revokeObjectURL(url);
   }
 
+  const enrichment = record.enrichment;
+
   return (
     <section className="card animate-rise-in">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -63,6 +77,11 @@ export function TriageResult({ record }: Props) {
           <h2 className="mt-1 font-display text-xl font-bold capitalize tracking-tight text-foreground">
             {record.complaintType} complaint
           </h2>
+          <p className="mt-1 text-xs text-muted">
+            {record.source === "live"
+              ? `Live model${record.model ? ` · ${record.model}` : ""}`
+              : "Deterministic rule engine"}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <UrgencyBadge urgency={record.urgency} />
@@ -116,20 +135,71 @@ export function TriageResult({ record }: Props) {
             </ol>
           </div>
 
+          {enrichment ? (
+            <div className="rounded-xl border border-line bg-surface-muted p-4">
+              <p className="label">Live context</p>
+              {enrichment.resolved ? (
+                <p className="mt-1 text-sm text-ink-800">
+                  Location verified as <span className="font-medium">{enrichment.resolved}</span>
+                  {enrichment.latitude !== null && enrichment.longitude !== null ? (
+                    <span className="text-muted">
+                      {" "}
+                      · {enrichment.latitude.toFixed(4)}, {enrichment.longitude.toFixed(4)}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-muted">
+                  Could not confirm this location from open data. Add a road name, area or postcode for a precise pin.
+                </p>
+              )}
+              {enrichment.weather ? (
+                <p className="mt-2 text-sm text-ink-800">
+                  Now at the site: <span className="font-medium">{enrichment.weather.summary}</span>
+                  {enrichment.weather.temperatureC !== null ? `, ${Math.round(enrichment.weather.temperatureC)}°C` : ""}
+                  {enrichment.weather.rainTodayMm !== null
+                    ? ` · ${enrichment.weather.rainTodayMm.toFixed(1)} mm rain forecast today`
+                    : ""}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {enrichment.mapUrl ? (
+                  <a
+                    href={enrichment.mapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-ghost py-1.5 text-xs"
+                  >
+                    Open map pin
+                  </a>
+                ) : null}
+                <span className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] text-muted">
+                  {enrichment.source}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           <div>
             <p className="label">Photo evidence</p>
             {record.photos.length > 0 ? (
               <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {record.photos.map((photo) => (
                   <li key={photo.id} className="overflow-hidden rounded-xl border border-line bg-surface">
-                    <a href={photo.dataUrl} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={photo.dataUrl}
-                        alt={photo.name}
-                        className="h-24 w-full object-cover transition hover:opacity-80"
-                      />
-                    </a>
+                    {photo.dataUrl ? (
+                      <a href={photo.dataUrl} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.dataUrl}
+                          alt={photo.name}
+                          className="h-24 w-full object-cover transition hover:opacity-80"
+                        />
+                      </a>
+                    ) : (
+                      <div className="flex h-24 w-full items-center justify-center bg-surface-muted px-2 text-center text-[10px] text-muted">
+                        Photo not kept after reload
+                      </div>
+                    )}
                     <p className="truncate px-2 py-1 text-[10px] text-muted">
                       {photo.name} · {formatBytes(photo.size)}
                     </p>
@@ -166,11 +236,22 @@ export function TriageResult({ record }: Props) {
         <button type="button" onClick={download} className="btn-primary py-2 text-xs">
           Download markdown
         </button>
-        <button type="button" onClick={() => copy("markdown")} className="btn-ghost py-2 text-xs">
+        <button
+          type="button"
+          onClick={() => copy("markdown", markdown)}
+          className="btn-ghost py-2 text-xs"
+        >
           {copied === "markdown" ? "Copied!" : "Copy markdown"}
         </button>
-        <button type="button" onClick={() => copy("json")} className="btn-ghost py-2 text-xs">
+        <button type="button" onClick={() => copy("json", json)} className="btn-ghost py-2 text-xs">
           {copied === "json" ? "Copied!" : "Copy JSON"}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy("reference", record.reference)}
+          className="btn-ghost py-2 text-xs"
+        >
+          {copied === "reference" ? "Copied!" : "Copy reference"}
         </button>
       </div>
     </section>

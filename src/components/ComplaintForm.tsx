@@ -58,12 +58,20 @@ export function ComplaintForm({
           id="complaint"
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              onSubmit();
+            }
+          }}
           rows={5}
           placeholder="Contoh: Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor."
+          aria-describedby="complaint-hint"
           className="input mt-3 resize-none p-4"
         />
-        <p className="mt-2 text-xs text-ink-400">
-          {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"}
+        <p id="complaint-hint" className="mt-2 text-xs text-ink-400">
+          {value.trim().length} characters · {photos.length} photo{photos.length === 1 ? "" : "s"} · press ⌘/Ctrl + Enter
+          to triage
         </p>
       </div>
 
@@ -154,7 +162,7 @@ export function ComplaintForm({
             onChange={(event) => onMockModeChange(event.target.checked)}
             className="h-3.5 w-3.5 accent-ember-500"
           />
-          Force demo mock mode
+          Offline rule engine (skip the live model)
         </label>
         <div className="flex flex-wrap gap-2">
           <button

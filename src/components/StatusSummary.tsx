@@ -10,6 +10,7 @@ export interface SummaryCounts {
   byUrgency: Record<Urgency, number>;
   agencies: number;
   photos: number;
+  live: number;
 }
 
 const STATUS_ROWS: { key: keyof Pick<SummaryCounts, "open" | "inProgress" | "resolved">; label: string; bar: string }[] = [
@@ -32,7 +33,9 @@ export function StatusSummary({ counts }: { counts: SummaryCounts }) {
     <section className="animate-rise-in">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg font-bold tracking-tight text-foreground">Status-wise summary</h2>
-        <p className="text-xs text-muted">This browser session</p>
+        <p className="text-xs text-muted">
+          This browser session · {counts.live} live-triaged
+        </p>
       </div>
 
       <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)]">

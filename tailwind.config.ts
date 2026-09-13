@@ -51,7 +51,7 @@ const config: Config = {
           300: "#f8ce72",
           400: "#f5b942",
           500: "#f2a81d",
-          700: "#a87408",
+          700: "#8a5f06",
         },
         // Reserved semantic success colour
         palm: {

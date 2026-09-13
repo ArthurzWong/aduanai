@@ -14,7 +14,24 @@ export function toMarkdown(record: ComplaintRecord): string {
     `- **Routed agency:** ${agency.code} — ${agency.name}`,
     `- **Submission channel:** ${agency.channel}`,
     `- **Status:** ${record.status}`,
-    `- **Triage source:** ${record.source === "live" ? "live AI model" : "mock fallback engine"}`,
+    `- **Triage source:** ${record.source === "live" ? `live AI model${record.model ? ` (${record.model})` : ""}` : "mock fallback engine"}`,
+    ...(record.enrichment
+      ? [
+          `- **Verified location:** ${record.enrichment.resolved ?? "unconfirmed"}`,
+          ...(record.enrichment.mapUrl ? [`- **Map pin:** ${record.enrichment.mapUrl}`] : []),
+          ...(record.enrichment.weather
+            ? [
+                `- **Weather at site:** ${record.enrichment.weather.summary}` +
+                  (record.enrichment.weather.temperatureC !== null
+                    ? `, ${Math.round(record.enrichment.weather.temperatureC)}°C`
+                    : "") +
+                  (record.enrichment.weather.rainTodayMm !== null
+                    ? `, ${record.enrichment.weather.rainTodayMm.toFixed(1)} mm rain forecast today`
+                    : ""),
+              ]
+            : []),
+        ]
+      : []),
     "",
     "## Summary",
     record.summary,

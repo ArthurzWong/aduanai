@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AiSettingsPanel } from "@/components/AiSettings";
 import { ComplaintForm } from "@/components/ComplaintForm";
 import { MobileNav, Sidebar, type View } from "@/components/Sidebar";
 import { StatusSummary, type SummaryCounts } from "@/components/StatusSummary";
@@ -9,7 +10,17 @@ import { TriageResult } from "@/components/TriageResult";
 import { Chip, UrgencyBadge } from "@/components/ui";
 import { AGENCIES } from "@/lib/agencies";
 import { referenceFor } from "@/lib/markdown";
-import { URGENCIES, type ComplaintPhoto, type ComplaintRecord, type TriageResponse, type Urgency } from "@/lib/types";
+import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings, type AiSettings } from "@/lib/settings";
+import { clearPersistedState, loadPersistedState, persistState } from "@/lib/store";
+import {
+  URGENCIES,
+  similarComplaints,
+  type ComplaintPhoto,
+  type ComplaintRecord,
+  type Enrichment,
+  type TriageResponse,
+  type Urgency,
+} from "@/lib/types";
 
 const DEMO_COMPLAINT = "Tolong, ada lubang besar di Jalan Ampang dekat KLCC, bahaya untuk motor.";
 const RESOLVED_STAGE = STATUS_STAGES.length - 1;
@@ -17,11 +28,12 @@ const RESOLVED_STAGE = STATUS_STAGES.length - 1;
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [formOpen, setFormOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [search, setSearch] = useState("");
 
   const [complaint, setComplaint] = useState(DEMO_COMPLAINT);
   const [photos, setPhotos] = useState<ComplaintPhoto[]>([]);
-  const [mockMode, setMockMode] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -29,6 +41,26 @@ export default function Home() {
   const [records, setRecords] = useState<ComplaintRecord[]>([]);
   const [stages, setStages] = useState<Record<string, number>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Restore the session and AI settings after mount (client-only storage).
+  useEffect(() => {
+    const persisted = loadPersistedState();
+    setRecords(persisted.records);
+    setStages(persisted.stages);
+    setActiveId(persisted.records[0]?.id ?? null);
+    const stored = loadAiSettings();
+    setSettings(stored);
+    setOfflineMode(stored.offline);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    persistState(records, stages);
+  }, [records, stages, hydrated]);
 
   const active = useMemo(() => records.find((record) => record.id === activeId) ?? null, [records, activeId]);
   const activeStage = active ? (stages[active.id] ?? 1) : 1;
@@ -41,9 +73,11 @@ export default function Home() {
     let open = 0;
     let inProgress = 0;
     let resolved = 0;
+    let live = 0;
 
     for (const record of records) {
       byUrgency[record.urgency] += 1;
+      if (record.source === "live") live += 1;
       const stage = stages[record.id] ?? 1;
       if (stage >= RESOLVED_STAGE) resolved += 1;
       else if (stage >= 2) inProgress += 1;
@@ -57,6 +91,7 @@ export default function Home() {
       byUrgency,
       agencies: new Set(records.map((record) => record.agency)).size,
       photos: records.reduce((total, record) => total + record.photos.length, 0),
+      live,
     };
   }, [records, stages]);
 
@@ -71,8 +106,21 @@ export default function Home() {
     );
   }, [records, search]);
 
+  const duplicates = useMemo(
+    () => (complaint.trim().length >= 10 ? similarComplaints(complaint, records) : []),
+    [complaint, records],
+  );
+
   const agencyCount = Object.keys(AGENCIES).length;
+  const liveReady = !offlineMode && settings.apiKey.trim().length > 0;
   const title = view === "dashboard" ? "Dashboard" : view === "complaints" ? "Complaints" : "Agency directory";
+
+  function updateSettings(next: AiSettings) {
+    setSettings(next);
+    setOfflineMode(next.offline);
+    saveAiSettings(next);
+    setSettingsOpen(false);
+  }
 
   async function submit() {
     const text = complaint.trim();
@@ -89,7 +137,14 @@ export default function Home() {
       const response = await fetch("/api/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ complaint: text, mock: mockMode }),
+        body: JSON.stringify({
+          complaint: text,
+          mock: offlineMode,
+          enrich: true,
+          apiKey: settings.apiKey,
+          model: settings.model,
+          baseUrl: settings.baseUrl,
+        }),
       });
 
       const payload = (await response.json()) as TriageResponse & { error?: string };
@@ -105,7 +160,10 @@ export default function Home() {
         input: text,
         createdAt: now.toISOString(),
         source: payload.source,
+        model: payload.model,
         photos,
+        enrichment: (payload.enrichment ?? null) as Enrichment | null,
+        history: [{ stage: 1, at: now.toISOString() }],
       };
 
       setRecords((previous) => [record, ...previous]);
@@ -124,6 +182,21 @@ export default function Home() {
 
   function setStage(id: string, next: number) {
     setStages((previous) => ({ ...previous, [id]: next }));
+    setRecords((previous) =>
+      previous.map((record) =>
+        record.id === id
+          ? { ...record, history: [...record.history.filter((entry) => entry.stage !== next), { stage: next, at: new Date().toISOString() }].sort((a, b) => a.stage - b.stage) }
+          : record,
+      ),
+    );
+  }
+
+  function resetSession() {
+    setRecords([]);
+    setStages({});
+    setActiveId(null);
+    setNotice(null);
+    clearPersistedState();
   }
 
   return (
@@ -150,13 +223,28 @@ export default function Home() {
               </p>
             </div>
             <div className="flex flex-col items-start gap-3 sm:items-end">
-              <button type="button" onClick={() => setFormOpen(true)} className="btn-primary">
-                <span className="text-base leading-none">+</span> New complaint
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    liveReady
+                      ? "border-palm-100/40 bg-palm-500/20 text-palm-100 hover:bg-palm-500/30"
+                      : "border-white/15 bg-white/[0.06] text-ink-100 hover:bg-white/10"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${liveReady ? "bg-palm-100" : "bg-gold-400"}`} />
+                  {offlineMode ? "Offline engine" : liveReady ? "Live AI active" : "Add API key"}
+                </button>
+                <button type="button" onClick={() => setFormOpen(true)} className="btn-primary">
+                  <span className="text-base leading-none">+</span> New complaint
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Chip tone="dark">
                   {records.length} complaint{records.length === 1 ? "" : "s"} filed
                 </Chip>
+                <Chip tone="dark">{counts.live} live-triaged</Chip>
                 <Chip tone="dark">
                   {counts.photos} photo{counts.photos === 1 ? "" : "s"} attached
                 </Chip>
@@ -182,9 +270,7 @@ export default function Home() {
           ) : null}
 
           {notice ? (
-            <p className="rounded-2xl border border-gold-300 bg-gold-100 px-4 py-3 text-sm text-ink-800">
-              {notice}
-            </p>
+            <p className="rounded-2xl border border-gold-300 bg-gold-100 px-4 py-3 text-sm text-ink-800">{notice}</p>
           ) : null}
 
           {view === "dashboard" ? (
@@ -192,7 +278,9 @@ export default function Home() {
               <StatusSummary counts={counts} />
 
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-                {active ? (
+                {loading ? (
+                  <TriageSkeleton />
+                ) : active ? (
                   <>
                     <TriageResult record={active} />
                     <div className="flex flex-col gap-5">
@@ -232,7 +320,9 @@ export default function Home() {
                   onSelect={(id) => setActiveId(id)}
                   title={`${filtered.length} complaint${filtered.length === 1 ? "" : "s"}`}
                 />
-                {active ? (
+                {loading ? (
+                  <TriageSkeleton />
+                ) : active ? (
                   <div className="space-y-5">
                     <TriageResult record={active} />
                     <StatusTracker
@@ -274,9 +364,16 @@ export default function Home() {
           ) : null}
         </div>
 
-        <footer className="mt-10 text-center text-xs text-ink-600">
-          Complaints stay in this browser session — AduanAI falls back to a deterministic engine when the AI model is
-          unavailable.
+        <footer className="mt-10 flex flex-col items-center gap-2 text-center text-xs text-ink-600">
+          <p>
+            Complaints are kept in this browser and restored on reload. Triage runs on a live model when a key is set,
+            and falls back to a deterministic rule engine when it is not.
+          </p>
+          {records.length > 0 ? (
+            <button type="button" onClick={resetSession} className="text-xs font-medium text-ember-600 hover:underline">
+              Clear this session
+            </button>
+          ) : null}
         </footer>
       </main>
 
@@ -298,14 +395,57 @@ export default function Home() {
               </button>
             </div>
 
+            {!liveReady ? (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold-300 bg-gold-100 px-4 py-3 text-sm text-ink-800">
+                <span>
+                  {offlineMode
+                    ? "Offline rule engine is on — triage will not use a live model."
+                    : "No live AI key yet. Add one to triage with a live model, or continue with the rule engine."}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="rounded-lg border border-ink-800/20 bg-surface px-3 py-1.5 text-xs font-semibold text-ink-800"
+                >
+                  AI settings
+                </button>
+              </div>
+            ) : null}
+
+            {duplicates.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-ember-200 bg-ember-50 px-4 py-3 text-sm text-ember-900">
+                <p className="font-medium">Possible duplicate</p>
+                <p className="mt-1 text-xs text-ember-800">
+                  This looks similar to {duplicates.length} existing complaint{duplicates.length === 1 ? "" : "s"}:
+                </p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {duplicates.map((record) => (
+                    <li key={record.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveId(record.id);
+                          setView("dashboard");
+                          setFormOpen(false);
+                        }}
+                        className="text-left underline decoration-ember-300 hover:text-ember-700"
+                      >
+                        {record.reference} · {record.complaintType} · {record.location}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="mt-5">
               <ComplaintForm
                 value={complaint}
                 onChange={setComplaint}
                 onSubmit={submit}
                 loading={loading}
-                mockMode={mockMode}
-                onMockModeChange={setMockMode}
+                mockMode={offlineMode}
+                onMockModeChange={setOfflineMode}
                 error={error}
                 photos={photos}
                 onPhotosChange={setPhotos}
@@ -314,7 +454,33 @@ export default function Home() {
           </div>
         </div>
       ) : null}
+
+      {settingsOpen ? (
+        <AiSettingsPanel settings={settings} onSave={updateSettings} onClose={() => setSettingsOpen(false)} />
+      ) : null}
     </div>
+  );
+}
+
+function TriageSkeleton() {
+  return (
+    <section className="card animate-rise-in" aria-busy="true" aria-live="polite">
+      <p className="label">Triaging</p>
+      <div className="mt-3 space-y-3">
+        <div className="h-6 w-2/3 animate-pulse rounded-lg bg-surface-muted" />
+        <div className="h-4 w-1/3 animate-pulse rounded-lg bg-surface-muted" />
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="h-20 animate-pulse rounded-xl bg-surface-muted" />
+        ))}
+      </div>
+      <div className="mt-5 space-y-2">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className="h-12 animate-pulse rounded-xl bg-surface-muted" />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -405,6 +571,9 @@ function ComplaintTable({
                       <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink-600">
                         {record.agency}
                       </span>
+                      {record.source === "live" ? (
+                        <span className="rounded-full bg-palm-50 px-2 py-0.5 text-[11px] text-palm-700">live</span>
+                      ) : null}
                       {record.photos.length > 0 ? (
                         <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink-600">
                           {record.photos.length} photo{record.photos.length === 1 ? "" : "s"}

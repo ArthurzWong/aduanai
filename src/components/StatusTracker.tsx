@@ -5,7 +5,7 @@ import type { ComplaintRecord } from "@/lib/types";
 
 export const STATUS_STAGES = [
   "Received",
-  "Triaged by AI",
+  "Triaged",
   "Routed to agency",
   "Agency in progress",
   "Resolved",
@@ -58,6 +58,7 @@ export function StatusTracker({ record, stageIndex, onAdvance, onReset }: Props)
         {STATUS_STAGES.map((stage, index) => {
           const done = index < stageIndex;
           const current = index === stageIndex;
+          const event = record.history?.find((entry) => entry.stage === index);
           return (
             <li key={stage} className="relative flex items-start gap-3">
               <span
@@ -71,7 +72,7 @@ export function StatusTracker({ record, stageIndex, onAdvance, onReset }: Props)
               >
                 {done ? "✓" : index + 1}
               </span>
-              <div>
+              <div className="min-w-0">
                 <p
                   className={`text-sm font-medium ${
                     current ? "text-foreground" : done ? "text-ink-700" : "text-ink-500"
@@ -80,6 +81,16 @@ export function StatusTracker({ record, stageIndex, onAdvance, onReset }: Props)
                   {stage}
                 </p>
                 {current ? <p className="text-xs text-ember-600">Current stage</p> : null}
+                {event ? (
+                  <p className="text-[11px] text-muted">
+                    {new Date(event.at).toLocaleString("en-MY", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                ) : null}
               </div>
             </li>
           );
